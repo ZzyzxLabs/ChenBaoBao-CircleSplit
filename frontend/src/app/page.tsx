@@ -1,18 +1,28 @@
+"use client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Caveat } from "next/font/google";
+import { ConnectButton } from "@/components/ConnectButton";
+import { useAccount } from "wagmi";
 
 const caveat = Caveat({ subsets: ["latin"], weight: ["700"] });
 
 export default function Home() {
+  const { address } = useAccount();
+
   return (
     <main className="min-h-screen flex items-center justify-center bg-background">
       <Card className="w-[420px] p-10 flex flex-col items-center border-2 border-black rounded-2xl shadow-lg">
         <h1
-          className={`text-3xl mb-12 text-center font-bold ${caveat.className}`}
+          className={`text-3xl mb-3 text-center font-bold ${caveat.className}`}
         >
           Welcome to ChenBaoBao-CircleSplit
         </h1>
+        {address && (
+          <h1 className={`text-2xl font-bold text-center ${caveat.className}`}>
+            Welcome Bao Bao: {address.slice(0, 6)}...{address.slice(-4)}
+          </h1>
+        )}
         <div className="flex flex-col gap-8 w-full items-center">
           <Button
             className="w-64 h-20 text-xl rounded-xl border-2 border-black"
@@ -26,12 +36,7 @@ export default function Home() {
           >
             join a ledger
           </Button>
-          <Button
-            className="w-64 h-20 text-xl rounded-xl border-2 border-black"
-            variant="outline"
-          >
-            wallet sign in
-          </Button>
+          <ConnectButton />
         </div>
       </Card>
     </main>
