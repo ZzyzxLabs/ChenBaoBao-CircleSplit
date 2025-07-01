@@ -12,6 +12,7 @@
     "@bigmi/react": "^0.3.1",
     "@lifi/widget": "^3.23.3",
     "@mysten/dapp-kit": "^0.16.13",
+    "@hookform/resolvers": "^5.1.1",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-select": "^2.2.5",
     "@radix-ui/react-slot": "^1.2.3",
@@ -24,9 +25,11 @@
     "next": "15.3.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hook-form": "^7.59.0",
     "tailwind-merge": "^3.3.1",
     "viem": "^2.31.4",
-    "wagmi": "^2.15.6"
+    "wagmi": "^2.15.6",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
