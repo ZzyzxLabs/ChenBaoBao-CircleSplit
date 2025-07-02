@@ -37,6 +37,7 @@ export default function DashboardPage() {
   const [members, setMembers] = useState<string[]>([]);
   const [fetchingMembers, setFetchingMembers] = useState(false);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
+  const [participantAmounts, setParticipantAmounts] = useState<{ [addr: string]: string }>({});
   const [transactions, setTransactions] = useState<any[]>([]);
   const [fetchingTxs, setFetchingTxs] = useState(false);
 
@@ -108,9 +109,12 @@ export default function DashboardPage() {
       const parsedExternalId = ethers.toBigInt(externalId);
       const parsedVendor = vendor;
       const parsedParticipants = selectedParticipants;
-      const parsedAmounts = amounts.split(",").map(a => ethers.parseUnits(a.trim(), 6));
+      const parsedAmounts = selectedParticipants.map(addr => ethers.parseUnits(participantAmounts[addr] || "0", 6));
       if (parsedParticipants.length !== parsedAmounts.length) {
         throw new Error("Participants and amounts length mismatch");
+      }
+      if (parsedAmounts.some(a => a <= BigInt(0))) {
+        throw new Error("All amounts must be greater than 0");
       }
       const tx = await contract.splitPayment(parsedExternalId, parsedVendor, parsedParticipants, parsedAmounts);
       await tx.wait();
@@ -223,20 +227,36 @@ export default function DashboardPage() {
                               setSelectedParticipants(prev => [...prev, addr]);
                             } else {
                               setSelectedParticipants(prev => prev.filter(a => a !== addr));
+                              setParticipantAmounts(prev => {
+                                const copy = { ...prev };
+                                delete copy[addr];
+                                return copy;
+                              });
                             }
                           }}
                           disabled={loading}
                         />
-                        <span className="break-all text-sm">{addr}</span>
+                        <span className="break-all text-sm">{shortAddr(addr)}</span>
+                        {selectedParticipants.includes(addr) && (
+                          <Input
+                            type="number"
+                            min="0"
+                            step="any"
+                            className="w-24 ml-2"
+                            placeholder="Amount"
+                            value={participantAmounts[addr] || ""}
+                            onChange={e => {
+                              const value = e.target.value;
+                              setParticipantAmounts(prev => ({ ...prev, [addr]: value }));
+                            }}
+                            disabled={loading}
+                          />
+                        )}
                       </label>
                     ))}
                   </div>
                 )}
-                <div className="text-xs text-gray-500 mt-1">Check to select participants. The order of amounts should match the order of checked participants.</div>
-              </div>
-              <div>
-                <Label htmlFor="amounts">Amounts (comma separated, USDC)</Label>
-                <Input id="amounts" value={amounts} onChange={e => setAmounts(e.target.value)} required disabled={loading} placeholder="10,20" />
+                <div className="text-xs text-gray-500 mt-1">Check to select participants and enter an amount for each.</div>
               </div>
               <Button type="submit" disabled={loading || !ledgerAddress} className="w-full">{loading ? "Processing..." : "Submit Payment"}</Button>
               {error && <div className="text-red-500 text-sm">{error}</div>}
