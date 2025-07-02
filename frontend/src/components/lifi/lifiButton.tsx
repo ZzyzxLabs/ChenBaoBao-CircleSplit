@@ -1,19 +1,21 @@
-'use client';
-import { useLifiWidget } from '../../app/lifiProvider';
+"use client";
+import { useLifiWidget } from "../../app/lifiProvider";
+import { Button } from "../ui/button";
 
 const LifiWidgetButton = () => {
   const { openWidget } = useLifiWidget();
 
   return (
-    <button
-      className="w-14 h-14 bg-pink-500 text-white rounded-full shadow-lg border-b-4 border-pink-700 active:translate-y-1 transition-all flex items-center justify-center"
+    <Button
       onClick={openWidget}
-      style={{
-        boxShadow: '0 4px #c026d3, 0 2px 8px rgba(0,0,0,0.15)',
-      }}
+      // style={{
+      //   boxShadow: "0 4px #c026d3, 0 2px 8px rgba(0,0,0,0.15)",
+      // }}
+      className="flex-1 h-14 text-lg rounded-xl border-2 border-black"
+      variant="outline"
     >
-      🔻
-    </button>
+      li.fi
+    </Button>
   );
 };
 

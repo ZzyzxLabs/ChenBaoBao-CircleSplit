@@ -10,7 +10,7 @@ import React, { useState } from "react";
 import { SendTransactionButton } from "@/components/lifi/sendBTN";
 import { CrossChainTransferForm } from "@/components/lifi/sendform";
 const caveat = Caveat({ subsets: ["latin"], weight: ["700"] });
-import  LifiWidgetButton  from "@/components/lifi/lifiButton";
+// import  LifiWidgetButton  from "@/components/lifi/lifiButton";
 export default function Home() {
   const { address } = useAccount();
   const [showCreateLedger, setShowCreateLedger] = useState(false);
@@ -49,7 +49,7 @@ export default function Home() {
       </Card>
 
       {/* Create Ledger Modal */}
-      <LifiWidgetButton />
+      {/* <LifiWidgetButton /> */}
       {showCreateLedger && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full text-center relative">

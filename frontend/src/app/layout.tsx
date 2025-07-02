@@ -34,11 +34,9 @@ export default function RootLayout({
       <body
         className={`min-h-screen min-w-full bg-background ${geistSans.variable} ${geistMono.variable} antialiased touch-manipulation`}
       >
-        <LifiWidgetDrawerProvider>
         <Providers>
-          {children}
+          <LifiWidgetDrawerProvider>{children}</LifiWidgetDrawerProvider>
         </Providers>
-        </LifiWidgetDrawerProvider>
       </body>
     </html>
   );
