@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { useSearchParams, useRouter } from "next/navigation";
 import LifiWidgetButton from "@/components/lifi/lifiButton";
 import { FiLogOut, FiCopy, FiCheck } from "react-icons/fi";
+import { randomUUID } from "crypto";
 
 const caveat = Caveat({ subsets: ["latin"], weight: "400" });
 
@@ -55,7 +56,6 @@ export default function DashboardPage() {
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [externalId, setExternalId] = useState("");
   const [vendor, setVendor] = useState("");
   const [members, setMembers] = useState<string[]>([]);
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>(
@@ -197,7 +197,8 @@ export default function DashboardPage() {
     try {
       if (!ledgerAddress) throw new Error("Ledger address is required in URL");
 
-      const parsedExternalId = BigInt(externalId);
+      // Generate a random UID for externalId
+      const generatedExternalId = BigInt('0x' + crypto.randomUUID().replace(/-/g, '').slice(0, 24));
       const parsedVendor = vendor;
       const parsedParticipants = selectedParticipants;
       const parsedAmounts = selectedParticipants.map((addr) =>
@@ -217,7 +218,7 @@ export default function DashboardPage() {
         abi: LedgerABI.abi,
         functionName: "splitPayment",
         args: [
-          parsedExternalId,
+          generatedExternalId,
           parsedVendor,
           parsedParticipants,
           parsedAmounts,
@@ -233,7 +234,6 @@ export default function DashboardPage() {
     if (isSuccess) {
       setSuccess("Payment added successfully!");
       setShowModal(false);
-      setExternalId("");
       setVendor("");
       setSelectedParticipants([]);
       setParticipantAmounts({});
@@ -436,17 +436,6 @@ export default function DashboardPage() {
                       <span className="text-red-500">Not found in URL</span>
                     )}
                   </div>
-                </div>
-                <div>
-                  <Label htmlFor="external-id">External ID</Label>
-                  <Input
-                    id="external-id"
-                    value={externalId}
-                    onChange={(e) => setExternalId(e.target.value)}
-                    required
-                    disabled={loading}
-                    placeholder="e.g. 123"
-                  />
                 </div>
                 <div>
                   <Label htmlFor="vendor">Vendor Address</Label>
