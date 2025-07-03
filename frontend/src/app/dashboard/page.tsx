@@ -70,6 +70,7 @@ export default function DashboardPage() {
   const [leaveError, setLeaveError] = useState("");
   const [leaveSuccess, setLeaveSuccess] = useState("");
   const [copied, setCopied] = useState(false);
+  const [leaveHash, setLeaveHash] = useState<`0x${string}` | undefined>(undefined);
 
   const publicClient = usePublicClient();
   const { address: userAddress } = useAccount();
@@ -85,7 +86,12 @@ export default function DashboardPage() {
     hash,
   });
 
+  const { isLoading: isLeaveConfirming, isSuccess: isLeaveSuccess } = useWaitForTransactionReceipt({
+    hash: leaveHash,
+  });
+
   const loading = isPending || isConfirming;
+  const isLeaving = leaveLoading || isLeaveConfirming;
 
   const router = useRouter();
 
@@ -253,20 +259,31 @@ export default function DashboardPage() {
     setLeaveSuccess("");
     setLeaveLoading(true);
     try {
-      await writeContract({
+      const result = await writeContract({
         address: ledgerAddress as `0x${string}`,
         abi: LedgerABI.abi,
         functionName: "leave",
       });
-      setLeaveSuccess("Left ledger successfully!");
-      // Redirect to home after leaving
-      setTimeout(() => router.push("/"), 1000);
+      // Set the leaveHash for waiting
+      if (typeof result === 'string') {
+        setLeaveHash(result as `0x${string}`);
+      }
     } catch (err: any) {
       setLeaveError(err.message || "Failed to leave ledger");
-    } finally {
       setLeaveLoading(false);
     }
   }
+
+  // Wait for leave transaction confirmation before redirecting
+  useEffect(() => {
+    if (isLeaveSuccess) {
+      setLeaveSuccess("Left ledger successfully!");
+      setTimeout(() => router.push("/"), 1000);
+    }
+    if (!isLeaveConfirming && !isLeaveSuccess) {
+      setLeaveLoading(false);
+    }
+  }, [isLeaveSuccess, isLeaveConfirming, router]);
 
   function handleCopy() {
     if (!ledgerAddress) return;
@@ -310,11 +327,11 @@ export default function DashboardPage() {
                 type="button"
                 className="absolute top-0 right-0 px-2 py-1 rounded bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 transition flex items-center gap-1 text-xs"
                 onClick={handleLeaveLedger}
-                disabled={leaveLoading}
+                disabled={isLeaving}
                 aria-label="Leave ledger"
               >
                 <FiLogOut size={14} />
-                {leaveLoading ? "Leaving..." : "Leave"}
+                {isLeaving ? "Leaving..." : "Leave"}
               </button>
               {leaveError && <div className="text-red-500 text-xs mt-1">{leaveError}</div>}
               {leaveSuccess && <div className="text-green-600 text-xs mt-1">{leaveSuccess}</div>}
@@ -512,6 +529,17 @@ export default function DashboardPage() {
                   <div className="text-green-600 text-sm">{success}</div>
                 )}
               </form>
+            </div>
+          </div>
+        )}
+        {isLeaving && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+            <div className="flex flex-col items-center gap-4 p-8 bg-white rounded-lg shadow-lg border-2 border-black">
+              <svg className="animate-spin h-8 w-8 text-gray-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              <span className="text-lg font-semibold text-gray-700">Leaving ledger, please wait...</span>
             </div>
           </div>
         )}
