@@ -93,17 +93,14 @@ const ERC20_ABI = [
 const LEDGER_FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_LEDGER_FACTORY_ADDRESS as `0x${string}`;
 
-export function JoinLedgerButton() {
-  const [ledgerAddress, setLedgerAddress] = useState("");
+export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddress?: string }) {
+  const [ledgerAddress, setLedgerAddress] = useState(initialLedgerAddress || "");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [approveAmount, setApproveAmount] = useState<bigint>(BigInt(0));
+  const [approveDone, setApproveDone] = useState(false);
   const [usdcAddress, setUsdcAddress] = useState<`0x${string}` | null>(null);
-  const [currentStep, setCurrentStep] = useState<
-    "idle" | "approving" | "joining"
-  >("idle");
+  const [currentStep, setCurrentStep] = useState<"idle" | "approving" | "joining">("idle");
   const [approvalHash, setApprovalHash] = useState<`0x${string}` | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>("");
   const [userLedgers, setUserLedgers] = useState<LedgerInfo[]>([]);
   const [fetchingLedgers, setFetchingLedgers] = useState(false);
   const router = useRouter();
@@ -123,16 +120,6 @@ export function JoinLedgerButton() {
 
   const loading = isPending || isConfirming;
 
-  // Read ledger settings when address is provided
-  const { data: ledgerSettings } = useReadContract({
-    address: ledgerAddress as `0x${string}`,
-    abi: LedgerABI.abi,
-    functionName: "getSettings",
-    query: {
-      enabled: !!ledgerAddress,
-    },
-  });
-
   // Read USDC address from ledger
   const { data: ledgerUsdc } = useReadContract({
     address: ledgerAddress as `0x${string}`,
@@ -143,133 +130,6 @@ export function JoinLedgerButton() {
     },
   });
 
-  // Read current USDC allowance
-  const { data: currentAllowance } = useReadContract({
-    address: usdcAddress as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: [userAddress as `0x${string}`, ledgerAddress as `0x${string}`],
-    query: {
-      enabled: !!usdcAddress && !!userAddress && !!ledgerAddress,
-    },
-  });
-
-  // Read USDC balance
-  const { data: usdcBalance } = useReadContract({
-    address: usdcAddress as `0x${string}`,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: [userAddress as `0x${string}`],
-    query: {
-      enabled: !!usdcAddress && !!userAddress,
-    },
-  });
-
-  // Fetch user's ledgers (created and joined)
-  useEffect(() => {
-    async function fetchLedgers() {
-      if (!userAddress || !LEDGER_FACTORY_ADDRESS || !publicClient) return;
-
-      setFetchingLedgers(true);
-      setUserLedgers([]);
-      try {
-        // Get ledgers created by the user
-        const createdLedgers = (await publicClient.readContract({
-          address: LEDGER_FACTORY_ADDRESS,
-          abi: LedgerFactoryABI.abi,
-          functionName: "getUserLedgers",
-          args: [userAddress as `0x${string}`],
-        })) as `0x${string}`[];
-
-        // Get ledgers where user is a member
-        const memberLedgers = (await publicClient.readContract({
-          address: LEDGER_FACTORY_ADDRESS,
-          abi: LedgerFactoryABI.abi,
-          functionName: "getUserMemberLedgers",
-          args: [userAddress as `0x${string}`],
-        })) as `0x${string}`[];
-
-        const allLedgers: LedgerInfo[] = [];
-
-        // Process created ledgers
-        for (const ledgerAddress of createdLedgers) {
-          try {
-            const members = (await publicClient.readContract({
-              address: ledgerAddress,
-              abi: LedgerABI.abi,
-              functionName: "listMembers",
-            })) as `0x${string}`[];
-
-            const owner = (await publicClient.readContract({
-              address: ledgerAddress,
-              abi: LedgerABI.abi,
-              functionName: "owner",
-            })) as `0x${string}`;
-
-            allLedgers.push({
-              address: ledgerAddress,
-              members: members,
-              owner: owner,
-              isOwner: true,
-            });
-          } catch (err) {
-            console.log(`Error fetching created ledger ${ledgerAddress}:`, err);
-          }
-        }
-
-        // Process member ledgers (avoid duplicates)
-        for (const ledgerAddress of memberLedgers) {
-          // Skip if already added as created ledger
-          if (allLedgers.some((ledger) => ledger.address === ledgerAddress)) {
-            continue;
-          }
-
-          try {
-            const members = (await publicClient.readContract({
-              address: ledgerAddress,
-              abi: LedgerABI.abi,
-              functionName: "listMembers",
-            })) as `0x${string}`[];
-
-            const owner = (await publicClient.readContract({
-              address: ledgerAddress,
-              abi: LedgerABI.abi,
-              functionName: "owner",
-            })) as `0x${string}`;
-
-            allLedgers.push({
-              address: ledgerAddress,
-              members: members,
-              owner: owner,
-              isOwner: false,
-            });
-          } catch (err) {
-            console.log(`Error fetching member ledger ${ledgerAddress}:`, err);
-          }
-        }
-
-        setUserLedgers(allLedgers);
-      } catch (err) {
-        console.log("Error fetching ledgers:", err);
-      } finally {
-        setFetchingLedgers(false);
-      }
-    }
-
-    fetchLedgers();
-  }, [userAddress]);
-
-  // Update approve amount when ledger settings change
-  useEffect(() => {
-    if (ledgerSettings) {
-      if (Array.isArray(ledgerSettings) && ledgerSettings.length >= 1) {
-        setApproveAmount(ledgerSettings[0] as bigint);
-      } else if (typeof ledgerSettings === "object" && "0" in ledgerSettings) {
-        setApproveAmount(ledgerSettings[0] as bigint);
-      }
-    }
-  }, [ledgerSettings]);
-
   // Update USDC address when ledger USDC changes
   useEffect(() => {
     if (ledgerUsdc) {
@@ -277,53 +137,88 @@ export function JoinLedgerButton() {
     }
   }, [ledgerUsdc]);
 
-  // Update debug info
+  // If initialLedgerAddress changes (e.g. modal opens with a new address), update state
   useEffect(() => {
-    let debug = "";
-    if (ledgerAddress) debug += `Ledger: ${ledgerAddress}\n`;
-    if (usdcAddress) debug += `USDC: ${usdcAddress}\n`;
-    if (approveAmount)
-      debug += `Required: ${(
-        Number(approveAmount) / 1e6
-      ).toLocaleString()} USDC\n`;
-    if (currentAllowance)
-      debug += `Allowance: ${(
-        Number(currentAllowance) / 1e6
-      ).toLocaleString()} USDC\n`;
-    if (usdcBalance)
-      debug += `Balance: ${(
-        Number(usdcBalance) / 1e6
-      ).toLocaleString()} USDC\n`;
-    if (currentStep) debug += `Step: ${currentStep}\n`;
-    if (approvalHash) debug += `Approval Hash: ${approvalHash}\n`;
-    setDebugInfo(debug);
-  }, [
-    ledgerAddress,
-    usdcAddress,
-    approveAmount,
-    currentAllowance,
-    usdcBalance,
-    currentStep,
-    approvalHash,
-  ]);
+    if (initialLedgerAddress) {
+      setLedgerAddress(initialLedgerAddress);
+    }
+  }, [initialLedgerAddress]);
+
+  // Fetch user's ledgers (created and joined)
+  async function fetchLedgers() {
+    if (!userAddress || !LEDGER_FACTORY_ADDRESS || !publicClient) return;
+
+    setFetchingLedgers(true);
+    setUserLedgers([]);
+    try {
+      // Get ledgers where user is a member
+      const memberLedgers = (await publicClient.readContract({
+        address: LEDGER_FACTORY_ADDRESS,
+        abi: LedgerFactoryABI.abi,
+        functionName: "getUserMemberLedgers",
+        args: [userAddress as `0x${string}`],
+      })) as `0x${string}`[];
+
+      const allLedgers: LedgerInfo[] = [];
+
+      // Process member ledgers (avoid duplicates)
+      for (const ledgerAddress of memberLedgers) {
+        // Skip if already added as created ledger
+        if (allLedgers.some((ledger) => ledger.address === ledgerAddress)) {
+          continue;
+        }
+
+        try {
+          const members = (await publicClient.readContract({
+            address: ledgerAddress,
+            abi: LedgerABI.abi,
+            functionName: "listMembers",
+          })) as `0x${string}`[];
+
+          const owner = (await publicClient.readContract({
+            address: ledgerAddress,
+            abi: LedgerABI.abi,
+            functionName: "owner",
+          })) as `0x${string}`;
+
+          allLedgers.push({
+            address: ledgerAddress,
+            members: members,
+            owner: owner,
+            isOwner: false,
+          });
+        } catch (err) {
+          console.log(`Error fetching member ledger ${ledgerAddress}:`, err);
+        }
+      }
+
+      setUserLedgers(allLedgers);
+    } catch (err) {
+      console.log("Error fetching ledgers:", err);
+    } finally {
+      setFetchingLedgers(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchLedgers();
+  }, [userAddress]);
 
   // Handle transaction success
   useEffect(() => {
     if (isSuccess && hash) {
       if (currentStep === "approving") {
-        // Approval transaction confirmed, now join the ledger
         setApprovalHash(hash);
-        setCurrentStep("joining");
-        // Small delay to ensure the approval is fully processed
-        setTimeout(() => {
-          handleJoinLedger();
-        }, 2000);
+        setApproveDone(true);
+        setCurrentStep("idle");
+        setSuccess("Approval successful! Now you can join the ledger.");
       } else if (currentStep === "joining") {
-        // Join successful
         setSuccess("Successfully joined the ledger!");
+        fetchLedgers();
         setLedgerAddress("");
         setCurrentStep("idle");
         setApprovalHash(null);
+        setApproveDone(false);
       }
     }
   }, [isSuccess, hash, currentStep, userAddress]);
@@ -337,7 +232,66 @@ export function JoinLedgerButton() {
     }
   }, [writeError]);
 
+  // Check on-chain allowance when relevant addresses change
+  useEffect(() => {
+    async function checkAllowance() {
+      if (!usdcAddress || !userAddress || !ledgerAddress || !publicClient) {
+        setApproveDone(false);
+        return;
+      }
+      try {
+        const allowance = await publicClient.readContract({
+          address: usdcAddress,
+          abi: ERC20_ABI,
+          functionName: "allowance",
+          args: [userAddress as `0x${string}`, ledgerAddress as `0x${string}`],
+        });
+        setApproveDone(BigInt(allowance) > BigInt(0));
+      } catch (err) {
+        setApproveDone(false);
+      }
+    }
+    checkAllowance();
+  }, [usdcAddress, userAddress, ledgerAddress, publicClient]);
+
+  async function handleApprove() {
+    setError("");
+    setSuccess("");
+    if (!ledgerAddress) {
+      setError("Please enter a ledger address");
+      return;
+    }
+    if (!usdcAddress) {
+      setError("Loading ledger information...");
+      return;
+    }
+    if (!userAddress) {
+      setError("Please connect your wallet");
+      return;
+    }
+    setCurrentStep("approving");
+    try {
+      await writeContract({
+        address: usdcAddress,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [ledgerAddress as `0x${string}`, BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")],
+      });
+    } catch (err: any) {
+      setError(err.message || "Transaction failed");
+      setCurrentStep("idle");
+      setApprovalHash(null);
+    }
+  }
+
   async function handleJoinLedger() {
+    setError("");
+    setSuccess("");
+    if (!ledgerAddress) {
+      setError("Please enter a ledger address");
+      return;
+    }
+    setCurrentStep("joining");
     try {
       await writeContract({
         address: ledgerAddress as `0x${string}`,
@@ -351,96 +305,22 @@ export function JoinLedgerButton() {
     }
   }
 
-  async function handleJoinLedgerWithApproval() {
-    if (!ledgerAddress) {
-      setError("Please enter a ledger address");
-      return;
-    }
-
-    if (!usdcAddress || !approveAmount) {
-      setError("Loading ledger information...");
-      return;
-    }
-
-    if (!userAddress) {
-      setError("Please connect your wallet");
-      return;
-    }
-
-    // Check USDC balance
-    if (usdcBalance && usdcBalance < approveAmount) {
-      setError(
-        `Insufficient USDC balance. You need at least ${(
-          Number(approveAmount) / 1e6
-        ).toLocaleString()} USDC`
-      );
-      return;
-    }
-
-    setError("");
-    setSuccess("");
-
-    try {
-      // Always approve first, regardless of current allowance
-      setCurrentStep("approving");
-      await writeContract({
-        address: usdcAddress,
-        abi: ERC20_ABI,
-        functionName: "approve",
-        args: [ledgerAddress as `0x${string}`, approveAmount],
-      });
-    } catch (err: any) {
-      setError(err.message || "Transaction failed");
-      setCurrentStep("idle");
-      setApprovalHash(null);
-    }
-  }
-
-  const approvalAmountFormatted = approveAmount
-    ? (Number(approveAmount) / 1e6).toLocaleString()
-    : "0";
-
-  const getButtonText = () => {
-    if (loading) {
-      if (currentStep === "approving") {
-        return "Approving USDC...";
-      } else if (currentStep === "joining") {
-        return "Joining Ledger...";
-      }
-      return "Processing...";
-    }
-
-    if (!ledgerAddress) {
-      return "Enter Ledger Address";
-    }
-
-    if (!approveAmount) {
-      return "Loading...";
-    }
-
-    return `Approve ${approvalAmountFormatted} USDC & Join Ledger`;
-  };
-
-  const getStatusMessage = () => {
-    if (currentStep === "approving" && approvalHash) {
-      return `Approval transaction submitted: ${approvalHash.slice(
-        0,
-        10
-      )}...${approvalHash.slice(-8)}`;
-    }
-    if (currentStep === "joining") {
-      return "Approval confirmed! Now joining the ledger...";
-    }
-    return null;
-  };
-
-  const isButtonDisabled =
-    loading || !ledgerAddress || !approveAmount || !userAddress;
+  const isApproveDisabled = loading || !ledgerAddress || !usdcAddress || !userAddress || approveDone;
+  const isJoinDisabled = loading || !ledgerAddress || !approveDone;
 
   return (
     <div className="space-y-4 max-w-md">
       <div className="mb-4">
         <h3 className="font-bold text-lg mb-2">Your Ledgers</h3>
+        <button
+          type="button"
+          className="mb-2 px-3 py-1 rounded border text-xs bg-gray-50 hover:bg-gray-100 transition disabled:opacity-50"
+          onClick={fetchLedgers}
+          disabled={fetchingLedgers}
+          aria-label="Refresh ledgers"
+        >
+          {fetchingLedgers ? "Refreshing..." : "Refresh"}
+        </button>
         {fetchingLedgers ? (
           <div className="text-gray-500">Loading your ledgers...</div>
         ) : userLedgers.length === 0 ? (
@@ -471,13 +351,13 @@ export function JoinLedgerButton() {
                   Members:{" "}
                   {ledger.members.length > 0
                     ? ledger.members.slice(0, 2).map((m, i) => (
-                        <span key={i}>
-                          {m === userAddress
-                            ? "You"
-                            : m.slice(0, 6) + "..." + m.slice(-4)}
-                          {i < ledger.members.length - 1 ? ", " : ""}
-                        </span>
-                      ))
+                      <span key={i}>
+                        {m === userAddress
+                          ? "You"
+                          : m.slice(0, 6) + "..." + m.slice(-4)}
+                        {i < ledger.members.length - 1 ? ", " : ""}
+                      </span>
+                    ))
                     : "None"}
                   {ledger.members.length > 2 &&
                     `, +${ledger.members.length - 2} more`}
@@ -490,7 +370,6 @@ export function JoinLedgerButton() {
 
       <div className="p-4 border rounded-md">
         <h3 className="font-bold text-lg mb-4">Join a Ledger</h3>
-
         <div className="space-y-4">
           <div>
             <Label htmlFor="ledger-address">Ledger Address</Label>
@@ -502,54 +381,29 @@ export function JoinLedgerButton() {
               disabled={loading}
             />
           </div>
-
-          {ledgerAddress && approveAmount > 0 && (
-            <div className="p-3 bg-blue-50 rounded border">
-              <div className="text-sm text-blue-800">
-                <strong>Required USDC Approval:</strong>{" "}
-                {approvalAmountFormatted} USDC
-              </div>
-              {usdcBalance && (
-                <div className="text-xs text-gray-600 mt-1">
-                  Your Balance: {(Number(usdcBalance) / 1e6).toLocaleString()}{" "}
-                  USDC
-                </div>
-              )}
-              <div className="text-xs text-blue-600 mt-1">
-                ⚠️ USDC approval is always required before joining
-              </div>
-            </div>
-          )}
-
           <Button
-            onClick={handleJoinLedgerWithApproval}
-            disabled={isButtonDisabled}
+            onClick={handleApprove}
+            disabled={isApproveDisabled}
+            className="w-full"
+            size="lg"
+            variant={approveDone ? "secondary" : "default"}
+          >
+            {loading && currentStep === "approving"
+              ? "Approving..."
+              : approveDone
+                ? "Approved"
+                : "Approve USDC"}
+          </Button>
+          <Button
+            onClick={handleJoinLedger}
+            disabled={isJoinDisabled}
             className="w-full"
             size="lg"
           >
-            {getButtonText()}
+            {loading && currentStep === "joining" ? "Joining..." : "Join Ledger"}
           </Button>
-
-          {getStatusMessage() && (
-            <div className="text-blue-600 text-sm bg-blue-50 p-2 rounded">
-              {getStatusMessage()}
-            </div>
-          )}
-
           {error && <div className="text-red-500 text-sm">{error}</div>}
           {success && <div className="text-green-600 text-sm">{success}</div>}
-
-          {/* Debug information - remove in production */}
-          {process.env.NODE_ENV === "development" && debugInfo && (
-            <details className="mt-4">
-              <summary className="text-xs text-gray-500 cursor-pointer">
-                Debug Info
-              </summary>
-              <pre className="text-xs text-gray-600 mt-2 bg-gray-100 p-2 rounded whitespace-pre-wrap">
-                {debugInfo}
-              </pre>
-            </details>
-          )}
         </div>
       </div>
     </div>

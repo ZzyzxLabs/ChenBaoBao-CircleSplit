@@ -223,6 +223,16 @@ export default function DashboardPage() {
         >
           Transactions
         </h1>
+        {ledgerAddress && (
+          <div className="mb-6 w-full flex flex-col items-center">
+            <span className="text-xs text-gray-500 font-mono break-all select-all">
+              Ledger Address:
+            </span>
+            <span className="text-sm font-mono break-all bg-gray-100 rounded px-2 py-1 mt-1">
+              {ledgerAddress}
+            </span>
+          </div>
+        )}
         <div className="w-full flex-1 flex flex-col items-center">
           <div
             className="w-full max-h-64 overflow-y-auto flex flex-col gap-4 bg-white/60 border border-black rounded-xl p-4 mb-8"

@@ -15,6 +15,14 @@ export default function Home() {
   const { address } = useAccount();
   const [showCreateLedger, setShowCreateLedger] = useState(false);
   const [showJoinLedger, setShowJoinLedger] = useState(false);
+  const [joinLedgerAddress, setJoinLedgerAddress] = useState<string>("");
+
+  // Callback for when a ledger is created
+  const handleLedgerCreated = (ledgerAddress: string) => {
+    setShowCreateLedger(false);
+    setJoinLedgerAddress(ledgerAddress);
+    setShowJoinLedger(true);
+  };
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-background">
@@ -60,7 +68,7 @@ export default function Home() {
             >
               ×
             </button>
-            <CreateLedgerButton />
+            <CreateLedgerButton onLedgerCreated={handleLedgerCreated} />
           </div>
         </div>
       )}
@@ -76,7 +84,7 @@ export default function Home() {
             >
               ×
             </button>
-            <JoinLedgerButton />
+            <JoinLedgerButton initialLedgerAddress={joinLedgerAddress} />
           </div>
         </div>
       )}

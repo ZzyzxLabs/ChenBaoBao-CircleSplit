@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { parseUnits } from "viem";
-import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, usePublicClient } from "wagmi";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -9,14 +9,18 @@ import LedgerFactoryABI from "../abi/LedgerFactory.json";
 const LEDGER_FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_LEDGER_FACTORY_ADDRESS as `0x${string}`;
 
-export function CreateLedgerButton() {
+export function CreateLedgerButton({ onLedgerCreated }: { onLedgerCreated?: (ledgerAddress: string) => void }) {
   const [name, setName] = useState("My Ledger");
-  const [approveAmount, setApproveAmount] = useState("1000");
   const [maxDaily, setMaxDaily] = useState("100");
   const [maxMonthly, setMaxMonthly] = useState("2000");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [ledgerAddress, setLedgerAddress] = useState<string | null>(null);
+  const { address: userAddress } = useAccount();
+  const publicClient = usePublicClient();
+
+  // INTMAX for uint256
+  const INTMAX = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
   const {
     data: hash,
@@ -44,7 +48,8 @@ export function CreateLedgerButton() {
         );
       }
 
-      const approve = parseUnits(approveAmount, 6); // USDC has 6 decimals
+      // Use INTMAX for approveAmount
+      const approve = INTMAX;
       const daily = parseUnits(maxDaily, 6);
       const monthly = parseUnits(maxMonthly, 6);
 
@@ -61,16 +66,34 @@ export function CreateLedgerButton() {
 
   // Handle transaction success
   React.useEffect(() => {
+    async function fetchLatestLedger() {
+      if (!publicClient || !userAddress) return;
+      try {
+        // Get all ledgers created by the user
+        const ledgers = (await publicClient.readContract({
+          address: LEDGER_FACTORY_ADDRESS,
+          abi: LedgerFactoryABI.abi,
+          functionName: "getUserLedgers",
+          args: [userAddress],
+        })) as string[];
+        if (ledgers.length > 0) {
+          const latest = ledgers[ledgers.length - 1];
+          setLedgerAddress(latest);
+          if (onLedgerCreated) onLedgerCreated(latest);
+        }
+      } catch (err) {
+        // fallback: just show success
+        setSuccess("Ledger created successfully!");
+      }
+    }
     if (isSuccess && hash) {
-      // For now, we'll show success without the ledger address
-      // In a real implementation, you might want to query the contract for the created ledger
-      setSuccess("Ledger created successfully!");
+      setSuccess(""); // clear old success
       setName("My Ledger");
-      setApproveAmount("1000");
       setMaxDaily("100");
       setMaxMonthly("2000");
+      fetchLatestLedger();
     }
-  }, [isSuccess, hash]);
+  }, [isSuccess, hash, publicClient, userAddress, onLedgerCreated]);
 
   // Handle write errors
   React.useEffect(() => {
@@ -102,19 +125,6 @@ export function CreateLedgerButton() {
             onChange={(e) => setName(e.target.value)}
             required
             disabled={loading}
-          />
-        </div>
-        <div>
-          <Label htmlFor="approve-amount">Approve Amount (USDC)</Label>
-          <Input
-            id="approve-amount"
-            type="number"
-            value={approveAmount}
-            onChange={(e) => setApproveAmount(e.target.value)}
-            required
-            disabled={loading}
-            min="0"
-            step="any"
           />
         </div>
         <div>
