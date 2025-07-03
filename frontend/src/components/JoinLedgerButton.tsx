@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { parseUnits } from "viem";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   useWriteContract,
   useReadContract,
@@ -94,14 +93,22 @@ const ERC20_ABI = [
 const LEDGER_FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_LEDGER_FACTORY_ADDRESS as `0x${string}`;
 
-export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddress?: string }) {
-  const [ledgerAddress, setLedgerAddress] = useState(initialLedgerAddress || "");
+export function JoinLedgerButton({
+  initialLedgerAddress,
+}: {
+  initialLedgerAddress?: string;
+}) {
+  const [ledgerAddress, setLedgerAddress] = useState(
+    initialLedgerAddress || ""
+  );
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [approveDone, setApproveDone] = useState(false);
   const [usdcAddress, setUsdcAddress] = useState<`0x${string}` | null>(null);
-  const [currentStep, setCurrentStep] = useState<"idle" | "approving" | "joining">("idle");
-  const [approvalHash, setApprovalHash] = useState<`0x${string}` | null>(null);
+  const [currentStep, setCurrentStep] = useState<
+    "idle" | "approving" | "joining"
+  >("idle");
+  const [, setApprovalHash] = useState<`0x${string}` | null>(null);
   const [userLedgers, setUserLedgers] = useState<LedgerInfo[]>([]);
   const [fetchingLedgers, setFetchingLedgers] = useState(false);
   const router = useRouter();
@@ -146,12 +153,20 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
   }, [initialLedgerAddress]);
 
   // Fetch user's ledgers (created and joined)
-  async function fetchLedgers() {
+  const fetchLedgers = useCallback(async () => {
     if (!userAddress || !LEDGER_FACTORY_ADDRESS || !publicClient) return;
 
     setFetchingLedgers(true);
     setUserLedgers([]);
     try {
+      // Get ledgers created by the user
+      const createdLedgers = (await publicClient.readContract({
+        address: LEDGER_FACTORY_ADDRESS,
+        abi: LedgerFactoryABI.abi,
+        functionName: "getUserLedgers",
+        args: [userAddress as `0x${string}`],
+      })) as `0x${string}`[];
+
       // Get ledgers where user is a member
       const memberLedgers = (await publicClient.readContract({
         address: LEDGER_FACTORY_ADDRESS,
@@ -161,6 +176,32 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
       })) as `0x${string}`[];
 
       const allLedgers: LedgerInfo[] = [];
+
+      // Process created ledgers
+      for (const ledgerAddress of createdLedgers) {
+        try {
+          const members = (await publicClient.readContract({
+            address: ledgerAddress,
+            abi: LedgerABI.abi,
+            functionName: "listMembers",
+          })) as `0x${string}`[];
+
+          const owner = (await publicClient.readContract({
+            address: ledgerAddress,
+            abi: LedgerABI.abi,
+            functionName: "owner",
+          })) as `0x${string}`;
+
+          allLedgers.push({
+            address: ledgerAddress,
+            members: members,
+            owner: owner,
+            isOwner: true,
+          });
+        } catch (error) {
+          console.log(`Error fetching created ledger ${ledgerAddress}:`, error);
+        }
+      }
 
       // Process member ledgers (avoid duplicates)
       for (const ledgerAddress of memberLedgers) {
@@ -188,22 +229,22 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
             owner: owner,
             isOwner: false,
           });
-        } catch (err) {
-          console.log(`Error fetching member ledger ${ledgerAddress}:`, err);
+        } catch (error) {
+          console.log(`Error fetching member ledger ${ledgerAddress}:`, error);
         }
       }
 
       setUserLedgers(allLedgers);
-    } catch (err) {
-      console.log("Error fetching ledgers:", err);
+    } catch (error) {
+      console.log("Error fetching ledgers:", error);
     } finally {
       setFetchingLedgers(false);
     }
-  }
+  }, [userAddress, publicClient]);
 
   useEffect(() => {
     fetchLedgers();
-  }, [userAddress]);
+  }, [fetchLedgers]);
 
   // Handle transaction success
   useEffect(() => {
@@ -222,7 +263,7 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
         setApproveDone(false);
       }
     }
-  }, [isSuccess, hash, currentStep, userAddress]);
+  }, [isSuccess, hash, currentStep, userAddress, fetchLedgers]);
 
   // Handle write errors
   useEffect(() => {
@@ -248,7 +289,7 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
           args: [userAddress as `0x${string}`, ledgerAddress as `0x${string}`],
         });
         setApproveDone(BigInt(allowance) > BigInt(0));
-      } catch (err) {
+      } catch {
         setApproveDone(false);
       }
     }
@@ -284,10 +325,17 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
         address: usdcAddress,
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [ledgerAddress as `0x${string}`, BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")],
+        args: [
+          ledgerAddress as `0x${string}`,
+          BigInt(
+            "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+          ),
+        ],
       });
-    } catch (err: any) {
-      setError(err.message || "Transaction failed");
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Transaction failed";
+      setError(errorMessage);
       setCurrentStep("idle");
       setApprovalHash(null);
     }
@@ -307,14 +355,17 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
         abi: LedgerABI.abi,
         functionName: "join",
       });
-    } catch (err: any) {
-      setError(err.message || "Failed to join ledger");
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to join ledger";
+      setError(errorMessage);
       setCurrentStep("idle");
       setApprovalHash(null);
     }
   }
 
-  const isApproveDisabled = loading || !ledgerAddress || !usdcAddress || !userAddress || approveDone;
+  const isApproveDisabled =
+    loading || !ledgerAddress || !usdcAddress || !userAddress || approveDone;
   const isJoinDisabled = loading || !ledgerAddress || !approveDone;
 
   return (
@@ -334,7 +385,7 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
           <div className="text-gray-500">Loading your ledgers...</div>
         ) : userLedgers.length === 0 ? (
           <div className="text-gray-500">
-            You haven't created or joined any ledgers yet.
+            You haven&apos;t created or joined any ledgers yet.
           </div>
         ) : (
           <div className="space-y-2 max-h-48 overflow-y-auto">
@@ -343,7 +394,9 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
                 <button
                   type="button"
                   className="w-full text-left p-2 bg-gray-50 rounded border flex flex-col items-start hover:bg-gray-100 transition cursor-pointer focus:outline-none"
-                  onClick={() => router.push(`/dashboard?ledger=${ledger.address}`)}
+                  onClick={() =>
+                    router.push(`/dashboard?ledger=${ledger.address}`)
+                  }
                   aria-label="Ledger info"
                 >
                   <div className="flex items-center gap-2">
@@ -357,8 +410,16 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
                       role="button"
                       tabIndex={0}
                       className="ml-1 p-1 rounded hover:bg-gray-200 transition cursor-pointer"
-                      onClick={e => { e.stopPropagation(); handleCopy(ledger.address); }}
-                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handleCopy(ledger.address); } }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(ledger.address);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.stopPropagation();
+                          handleCopy(ledger.address);
+                        }
+                      }}
                       aria-label="Copy ledger address"
                     >
                       {copiedLedger === ledger.address ? (
@@ -369,17 +430,19 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
                     </span>
                   </div>
                   <div className="text-xs text-gray-600 mt-1">
-                    Members: {ledger.members.length > 0
+                    Members:{" "}
+                    {ledger.members.length > 0
                       ? ledger.members.slice(0, 2).map((m, i) => (
-                        <span key={i}>
-                          {m === userAddress
-                            ? "You"
-                            : m.slice(0, 6) + "..." + m.slice(-4)}
-                          {i < ledger.members.length - 1 ? ", " : ""}
-                        </span>
-                      ))
+                          <span key={i}>
+                            {m === userAddress
+                              ? "You"
+                              : m.slice(0, 6) + "..." + m.slice(-4)}
+                            {i < ledger.members.length - 1 ? ", " : ""}
+                          </span>
+                        ))
                       : "None"}
-                    {ledger.members.length > 2 && `, +${ledger.members.length - 2} more`}
+                    {ledger.members.length > 2 &&
+                      `, +${ledger.members.length - 2} more`}
                   </div>
                 </button>
               </div>
@@ -411,8 +474,8 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
             {loading && currentStep === "approving"
               ? "Approving..."
               : approveDone
-                ? "Approved"
-                : "Approve USDC"}
+              ? "Approved"
+              : "Approve USDC"}
           </Button>
           <Button
             onClick={handleJoinLedger}
@@ -420,7 +483,9 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
             className="w-full"
             size="lg"
           >
-            {loading && currentStep === "joining" ? "Joining..." : "Join Ledger"}
+            {loading && currentStep === "joining"
+              ? "Joining..."
+              : "Join Ledger"}
           </Button>
           {error && <div className="text-red-500 text-sm">{error}</div>}
           {success && <div className="text-green-600 text-sm">{success}</div>}

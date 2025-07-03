@@ -34,7 +34,6 @@ const widgetConfig: WidgetConfig = {
     container: {
       boxShadow: "0px 8px 32px rgba(0, 0, 0, 0.08)",
       borderRadius: "16px",
-      height: "400px",
       width: "100%",
     },
   },

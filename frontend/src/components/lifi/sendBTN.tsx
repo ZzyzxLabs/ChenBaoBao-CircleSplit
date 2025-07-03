@@ -39,8 +39,10 @@ export function SendTransactionButton() {
         to: address,
         value: parseEther("0.001"), // 0.001 ETH
       });
-    } catch (err: any) {
-      setError(err.message || "Transaction failed");
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Transaction failed";
+      setError(errorMessage);
     }
   }
 

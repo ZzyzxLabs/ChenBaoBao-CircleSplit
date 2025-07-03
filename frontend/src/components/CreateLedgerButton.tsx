@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 import { parseUnits } from "viem";
-import { useWriteContract, useWaitForTransactionReceipt, useAccount, usePublicClient } from "wagmi";
+import {
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useAccount,
+  usePublicClient,
+} from "wagmi";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -9,7 +14,11 @@ import LedgerFactoryABI from "../abi/LedgerFactory.json";
 const LEDGER_FACTORY_ADDRESS = process.env
   .NEXT_PUBLIC_LEDGER_FACTORY_ADDRESS as `0x${string}`;
 
-export function CreateLedgerButton({ onLedgerCreated }: { onLedgerCreated?: (ledgerAddress: string) => void }) {
+export function CreateLedgerButton({
+  onLedgerCreated,
+}: {
+  onLedgerCreated?: (ledgerAddress: string) => void;
+}) {
   const [name, setName] = useState("My Ledger");
   const [maxDaily, setMaxDaily] = useState("100");
   const [maxMonthly, setMaxMonthly] = useState("2000");
@@ -20,7 +29,9 @@ export function CreateLedgerButton({ onLedgerCreated }: { onLedgerCreated?: (led
   const publicClient = usePublicClient();
 
   // INTMAX for uint256
-  const INTMAX = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+  const INTMAX = BigInt(
+    "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  );
 
   const {
     data: hash,
@@ -59,8 +70,10 @@ export function CreateLedgerButton({ onLedgerCreated }: { onLedgerCreated?: (led
         functionName: "createLedger",
         args: [name, approve, daily, monthly],
       });
-    } catch (err: any) {
-      setError(err.message || "Transaction failed");
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to create ledger";
+      setError(errorMessage);
     }
   }
 
@@ -81,7 +94,7 @@ export function CreateLedgerButton({ onLedgerCreated }: { onLedgerCreated?: (led
           setLedgerAddress(latest);
           if (onLedgerCreated) onLedgerCreated(latest);
         }
-      } catch (err) {
+      } catch {
         // fallback: just show success
         setSuccess("Ledger created successfully!");
       }
