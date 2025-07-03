@@ -13,6 +13,7 @@ import { Label } from "./ui/label";
 import LedgerABI from "../abi/Ledger.json";
 import LedgerFactoryABI from "../abi/LedgerFactory.json";
 import { useRouter } from "next/navigation";
+import { FiCopy, FiCheck } from "react-icons/fi";
 
 interface LedgerInfo {
   address: string;
@@ -254,6 +255,14 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
     checkAllowance();
   }, [usdcAddress, userAddress, ledgerAddress, publicClient]);
 
+  const [copiedLedger, setCopiedLedger] = useState<string | null>(null);
+
+  function handleCopy(address: string) {
+    navigator.clipboard.writeText(address);
+    setCopiedLedger(address);
+    setTimeout(() => setCopiedLedger(null), 1200);
+  }
+
   async function handleApprove() {
     setError("");
     setSuccess("");
@@ -330,39 +339,50 @@ export function JoinLedgerButton({ initialLedgerAddress }: { initialLedgerAddres
         ) : (
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {userLedgers.map((ledger) => (
-              <button
-                key={ledger.address}
-                type="button"
-                className="w-full text-left p-2 bg-gray-50 rounded border flex flex-col items-start relative hover:bg-gray-100 transition cursor-pointer focus:outline-none"
-                onClick={() =>
-                  router.push(`/dashboard?ledger=${ledger.address}`)
-                }
-                aria-label="Ledger info"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-xs">
-                    {ledger.isOwner ? "(Owner)" : "(Member)"}
-                  </span>
-                  <span className="text-xs text-gray-500 break-all">
-                    {ledger.address}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-600 mt-1">
-                  Members:{" "}
-                  {ledger.members.length > 0
-                    ? ledger.members.slice(0, 2).map((m, i) => (
-                      <span key={i}>
-                        {m === userAddress
-                          ? "You"
-                          : m.slice(0, 6) + "..." + m.slice(-4)}
-                        {i < ledger.members.length - 1 ? ", " : ""}
-                      </span>
-                    ))
-                    : "None"}
-                  {ledger.members.length > 2 &&
-                    `, +${ledger.members.length - 2} more`}
-                </div>
-              </button>
+              <div key={ledger.address}>
+                <button
+                  type="button"
+                  className="w-full text-left p-2 bg-gray-50 rounded border flex flex-col items-start hover:bg-gray-100 transition cursor-pointer focus:outline-none"
+                  onClick={() => router.push(`/dashboard?ledger=${ledger.address}`)}
+                  aria-label="Ledger info"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-xs">
+                      {ledger.isOwner ? "(Owner)" : "(Member)"}
+                    </span>
+                    <span className="text-xs text-gray-500 break-all">
+                      {ledger.address}
+                    </span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="ml-1 p-1 rounded hover:bg-gray-200 transition cursor-pointer"
+                      onClick={e => { e.stopPropagation(); handleCopy(ledger.address); }}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); handleCopy(ledger.address); } }}
+                      aria-label="Copy ledger address"
+                    >
+                      {copiedLedger === ledger.address ? (
+                        <FiCheck className="text-green-600" size={14} />
+                      ) : (
+                        <FiCopy size={14} />
+                      )}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-600 mt-1">
+                    Members: {ledger.members.length > 0
+                      ? ledger.members.slice(0, 2).map((m, i) => (
+                        <span key={i}>
+                          {m === userAddress
+                            ? "You"
+                            : m.slice(0, 6) + "..." + m.slice(-4)}
+                          {i < ledger.members.length - 1 ? ", " : ""}
+                        </span>
+                      ))
+                      : "None"}
+                    {ledger.members.length > 2 && `, +${ledger.members.length - 2} more`}
+                  </div>
+                </button>
+              </div>
             ))}
           </div>
         )}
